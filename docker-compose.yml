@@ -24,6 +24,35 @@ services:
     volumes:
       - fx-redis:/data
 
+  api:
+    build: ./backend
+    env_file: .env
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+
+  worker:
+    build: ./backend
+    env_file: .env
+    command: celery -A config worker --loglevel=INFO --concurrency=4 --prefetch-multiplier=1 -Ofair
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
 volumes:
   fx-postgres:
   fx-redis:

@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fx-platform-backend"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "Django>=5.1,<5.3",
+  "djangorestframework>=3.15,<3.17",
+  "djangorestframework-simplejwt>=5.4,<6",
+  "django-cors-headers>=4.6,<5",
+  "dj-database-url>=2.3,<3",
+  "psycopg[binary]>=3.2,<4",
+  "celery[redis]>=5.4,<6",
+  "cryptography>=44,<46",
+  "gunicorn>=23,<24",
+  "whitenoise>=6.8,<7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9",
+  "pytest-django>=4.9,<5",
+  "ruff>=0.9,<1",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+exclude = ["*/migrations/*"]
+
+[tool.ruff.lint]
+ignore = ["RUF012"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["config*", "core*", "tenancy*", "trading*", "terminal*"]

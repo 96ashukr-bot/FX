@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600&display=swap');
+:root { font-family: "DM Sans", sans-serif; color: #e7edf8; background: #070b12; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: radial-gradient(circle at 75% -20%, #17314b 0, transparent 38%), #070b12; }
+button { font: inherit; }
+.shell { min-height: 100vh; display: grid; grid-template-columns: 250px 1fr; --brand: #57e0a1; }
+aside { border-right: 1px solid #1d2634; padding: 28px 18px; display: flex; flex-direction: column; background: rgba(8,13,22,.82); backdrop-filter: blur(18px); }
+.brand { display: flex; gap: 12px; align-items: center; padding: 0 10px 32px; }
+.brand > span, .brand img { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; background: var(--brand); color: #07120d; font: 700 16px "Space Grotesk"; object-fit: contain; }
+.brand strong, .brand small { display: block; }.brand strong { font: 600 17px "Space Grotesk"; }.brand small { color: #718096; margin-top: 3px; font-size: 11px; }
+nav { display: grid; gap: 7px; } nav button { border: 0; color: #7f8ca1; background: transparent; border-radius: 10px; padding: 12px 13px; display: flex; gap: 12px; align-items: center; cursor: pointer; text-align: left; }
+nav button:hover, nav button.active { color: #eef5ff; background: #131c29; } nav button.active svg { color: var(--brand); }
+.node-health { margin-top: auto; color: #8290a3; font-size: 11px; padding: 14px 10px; border-top: 1px solid #182131; }.pulse { display: inline-block; width: 7px; height: 7px; background: var(--brand); border-radius: 50%; margin-right: 8px; box-shadow: 0 0 12px var(--brand); }
+main { padding: 38px clamp(24px, 4vw, 64px); max-width: 1600px; width: 100%; margin: auto; align-self: start; }
+header { display: flex; justify-content: space-between; align-items: end; margin-bottom: 30px; } header p { color: var(--brand); font-size: 11px; letter-spacing: .2em; font-weight: 700; margin: 0 0 8px; } h1 { font: 600 32px "Space Grotesk"; margin: 0; }
+.trade { border: 0; border-radius: 9px; background: var(--brand); color: #07120d; font-weight: 700; padding: 12px 18px; cursor: pointer; }
+.error { border: 1px solid #6f3040; color: #ff9dad; background: #2a121a; padding: 12px 16px; border-radius: 9px; margin-bottom: 20px; }
+.metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }.metric, .panel { border: 1px solid #1e2939; background: linear-gradient(145deg, rgba(18,26,38,.95), rgba(10,16,26,.9)); border-radius: 14px; box-shadow: 0 12px 35px rgba(0,0,0,.16); }
+.metric { padding: 20px; }.metric small, .metric strong, .metric span { display: block; }.metric small { color: #7e8b9e; font-size: 12px; }.metric strong { font: 600 27px "Space Grotesk"; margin: 12px 0 6px; }.metric span { color: #596679; font-size: 11px; }.metric .positive { color: var(--brand); }
+.grid { display: grid; grid-template-columns: .9fr 1.3fr; gap: 14px; margin-top: 14px; }.panel { padding: 20px; min-height: 390px; }.panel-title { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #1a2432; padding-bottom: 16px; margin-bottom: 4px; }.panel-title h2 { font: 600 15px "Space Grotesk"; margin: 0; }.panel-title button { border: 0; background: transparent; color: var(--brand); font-size: 12px; cursor: pointer; }
+.account, .intent { display: grid; align-items: center; gap: 12px; border-bottom: 1px solid #151e2b; padding: 14px 2px; }.account { grid-template-columns: auto 1fr auto; }.intent { grid-template-columns: auto 1fr auto; }.account strong, .account small, .intent strong, .intent small { display: block; }.account strong, .intent strong { font-size: 13px; }.account small, .intent small { color: #69768a; font-size: 11px; margin-top: 4px; }
+.platform, .side { display: grid; place-items: center; min-width: 42px; height: 30px; padding: 0 8px; border-radius: 7px; font: 700 10px "Space Grotesk"; }.platform.mt4 { background: #193044; color: #6ec8ff; }.platform.mt5 { background: #28204d; color: #aa91ff; }.side.buy { background: #153327; color: #61e5a1; }.side.sell { background: #3a1c25; color: #ff8799; }
+.status, .intent-state { color: #8290a3; font-size: 10px; letter-spacing: .07em; }.status.connected { color: var(--brand); }.empty { display: grid; place-items: center; min-height: 280px; color: #596679; font-size: 13px; }
+@media (max-width: 1000px) { .shell { grid-template-columns: 76px 1fr; } .brand div, nav button:not(.active) span, .node-health { display: none; } .brand { padding-left: 0; } nav button { justify-content: center; } .metrics { grid-template-columns: repeat(2,1fr); } .grid { grid-template-columns: 1fr; } }
+@media (max-width: 620px) { aside { display: none; } .shell { display: block; } main { padding: 24px 16px; } .metrics { grid-template-columns: 1fr 1fr; } header { align-items: start; } .trade { font-size: 12px; } }
