@@ -48,6 +48,11 @@ def _normalize_order_type(value):
 @transaction.atomic
 def create_trade_intent(*, account, source, action, idempotency_key, payload, strategy=None, parent=None):
     account = TradingAccount.objects.select_for_update().select_related("tenant").get(pk=account.pk)
+    if not account.tenant.is_active:
+        raise IntentError("Tenant is disabled")
+    subscription = getattr(account.tenant, "subscription", None)
+    if not subscription or not subscription.permits_trading:
+        raise IntentError("Tenant subscription does not permit trading")
     if not account.is_enabled:
         raise IntentError("Trading account is disabled")
     node = getattr(account, "execution_node", None)
@@ -117,7 +122,9 @@ def create_trade_intent(*, account, source, action, idempotency_key, payload, st
             },
             "protection": {
                 "stop_loss": str(payload.get("stop_loss")) if payload.get("stop_loss") is not None else None,
-                "take_profit": str(payload.get("take_profit")) if payload.get("take_profit") is not None else None,
+                "take_profit": str(payload.get("take_profit"))
+                if payload.get("take_profit") is not None
+                else None,
             },
             "close_snapshot": payload.get("execution_snapshot") or {},
             "idempotency_key": idempotency_key,

@@ -1,9 +1,11 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.test import TestCase
+from django.utils import timezone
 
 from core.models import User
-from tenancy.models import Tenant
+from tenancy.models import SubscriptionPlan, Tenant, TenantSubscription
 from terminal.models import ExecutionNode, TerminalCommand
 from trading.models import TradeIntent, TradingAccount
 from trading.services import create_trade_intent
@@ -12,6 +14,14 @@ from trading.services import create_trade_intent
 class ExecutionLifecycleTests(TestCase):
     def setUp(self):
         self.tenant = Tenant.objects.create(name="Northstar Markets", slug="northstar")
+        plan = SubscriptionPlan.objects.create(name="Test", code="test", account_limit=10, client_limit=10)
+        TenantSubscription.objects.create(
+            tenant=self.tenant,
+            plan=plan,
+            status=TenantSubscription.Status.ACTIVE,
+            starts_at=timezone.now() - timedelta(days=1),
+            ends_at=timezone.now() + timedelta(days=30),
+        )
         self.client = User.objects.create_user(
             username="client",
             email="client@example.com",
@@ -100,12 +110,18 @@ class ExecutionLifecycleTests(TestCase):
         )
         payload = {"symbol": "GBPUSD", "side": "BUY", "order_type": "MARKET", "volume": "0.10"}
         first, _ = create_trade_intent(
-            account=self.account, source=TradeIntent.Source.MANUAL, action=TradeIntent.Action.OPEN,
-            idempotency_key="shared-key", payload=payload,
+            account=self.account,
+            source=TradeIntent.Source.MANUAL,
+            action=TradeIntent.Action.OPEN,
+            idempotency_key="shared-key",
+            payload=payload,
         )
         second, _ = create_trade_intent(
-            account=second_account, source=TradeIntent.Source.MANUAL, action=TradeIntent.Action.OPEN,
-            idempotency_key="shared-key", payload=payload,
+            account=second_account,
+            source=TradeIntent.Source.MANUAL,
+            action=TradeIntent.Action.OPEN,
+            idempotency_key="shared-key",
+            payload=payload,
         )
         self.assertNotEqual(first.id, second.id)
 

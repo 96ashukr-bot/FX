@@ -43,3 +43,43 @@ class TenantMembership(TimeStampedModel):
 
     class Meta:
         constraints = [models.UniqueConstraint(fields=["tenant", "user"], name="unique_tenant_member")]
+
+
+class SubscriptionPlan(TimeStampedModel):
+    name = models.CharField(max_length=120)
+    code = models.SlugField(unique=True)
+    monthly_price = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    currency = models.CharField(max_length=8, default="USD")
+    account_limit = models.PositiveIntegerField(default=1)
+    client_limit = models.PositiveIntegerField(default=1)
+    features = models.JSONField(default=dict, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+
+class TenantSubscription(TimeStampedModel):
+    class Status(models.TextChoices):
+        TRIAL = "TRIAL"
+        ACTIVE = "ACTIVE"
+        PAST_DUE = "PAST_DUE"
+        SUSPENDED = "SUSPENDED"
+        CANCELLED = "CANCELLED"
+        EXPIRED = "EXPIRED"
+
+    tenant = models.OneToOneField(Tenant, related_name="subscription", on_delete=models.PROTECT)
+    plan = models.ForeignKey(SubscriptionPlan, related_name="subscriptions", on_delete=models.PROTECT)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.TRIAL)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    metadata = models.JSONField(default=dict, blank=True)
+
+    @property
+    def permits_trading(self):
+        from django.utils import timezone
+
+        return (
+            self.status in {self.Status.TRIAL, self.Status.ACTIVE}
+            and self.starts_at <= timezone.now() < self.ends_at
+        )

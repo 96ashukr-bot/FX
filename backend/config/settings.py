@@ -6,7 +6,9 @@ import dj_database_url
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY", "unsafe-development-only")
 DEBUG = os.environ.get("DEBUG", "false").lower() == "true"
-ALLOWED_HOSTS = [item.strip() for item in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if item.strip()]
+ALLOWED_HOSTS = [
+    item.strip() for item in os.environ.get("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if item.strip()
+]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -39,16 +41,20 @@ ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
 ASGI_APPLICATION = "config.asgi.application"
 
-TEMPLATES = [{
-    "BACKEND": "django.template.backends.django.DjangoTemplates",
-    "DIRS": [],
-    "APP_DIRS": True,
-    "OPTIONS": {"context_processors": [
-        "django.template.context_processors.request",
-        "django.contrib.auth.context_processors.auth",
-        "django.contrib.messages.context_processors.messages",
-    ]},
-}]
+TEMPLATES = [
+    {
+        "BACKEND": "django.template.backends.django.DjangoTemplates",
+        "DIRS": [],
+        "APP_DIRS": True,
+        "OPTIONS": {
+            "context_processors": [
+                "django.template.context_processors.request",
+                "django.contrib.auth.context_processors.auth",
+                "django.contrib.messages.context_processors.messages",
+            ]
+        },
+    }
+]
 
 DATABASES = {
     "default": dj_database_url.config(
@@ -70,17 +76,21 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ),
-    "DEFAULT_PERMISSION_CLASSES": (
-        "rest_framework.permissions.IsAuthenticated",
-    ),
+    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
 }
 
-CORS_ALLOWED_ORIGINS = [item.strip() for item in os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if item.strip()]
-CSRF_TRUSTED_ORIGINS = [item.strip() for item in os.environ.get("CSRF_TRUSTED_ORIGINS", "http://localhost:5173").split(",") if item.strip()]
+CORS_ALLOWED_ORIGINS = [
+    item.strip()
+    for item in os.environ.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",")
+    if item.strip()
+]
+CSRF_TRUSTED_ORIGINS = [
+    item.strip()
+    for item in os.environ.get("CSRF_TRUSTED_ORIGINS", "http://localhost:5173").split(",")
+    if item.strip()
+]
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 CELERY_BROKER_URL = REDIS_URL

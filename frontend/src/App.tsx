@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Activity, BarChart3, Copy, LayoutDashboard, Radio, Settings, ShieldCheck, WalletCards } from "lucide-react";
-import { api } from "./api";
+import { api, login } from "./api";
 
 type Branding = { name: string; branding: { primary_color?: string; logo_url?: string } };
 type Account = { id: string; platform: string; broker_name: string; login: string; connection_status: string; last_equity?: string };
@@ -17,6 +17,7 @@ export default function App() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [intents, setIntents] = useState<Intent[]>([]);
   const [error, setError] = useState("");
+  const [authenticated, setAuthenticated] = useState(Boolean(localStorage.getItem("access_token")));
 
   useEffect(() => {
     api<Branding>("/branding").then(setBranding).catch(() => undefined);
@@ -25,7 +26,9 @@ export default function App() {
         .then(([nextAccounts, nextIntents]) => { setAccounts(nextAccounts); setIntents(nextIntents); })
         .catch((reason) => setError(reason.message));
     }
-  }, []);
+  }, [authenticated]);
+
+  if (!authenticated) return <Login branding={branding} onAuthenticated={() => setAuthenticated(true)} />;
 
   const connected = accounts.filter((item) => item.connection_status === "CONNECTED").length;
   const active = intents.filter((item) => ["QUEUED", "CLAIMED", "SUBMITTED", "ACCEPTED", "PARTIAL"].includes(item.state)).length;
@@ -41,7 +44,7 @@ export default function App() {
       <div className="node-health"><span className="pulse" /> Execution network operational</div>
     </aside>
     <main>
-      <header><div><p>COMMAND CENTRE</p><h1>Trading overview</h1></div><button className="trade">New manual trade</button></header>
+      <header><div><p>COMMAND CENTRE</p><h1>Trading overview</h1></div><div className="header-actions"><button className="secondary" onClick={() => { localStorage.clear(); setAuthenticated(false); }}>Sign out</button><button className="trade">New manual trade</button></div></header>
       {error && <div className="error">{error}</div>}
       <section className="metrics">
         <Metric label="Connected accounts" value={`${connected}/${accounts.length}`} meta="MT4 and MT5" />
@@ -66,6 +69,29 @@ export default function App() {
         </article>
       </section>
     </main>
+  </div>;
+}
+
+function Login({ branding, onAuthenticated }: { branding: Branding; onAuthenticated: () => void }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(event: React.FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    try { await login(email, password); onAuthenticated(); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to sign in"); }
+    finally { setBusy(false); }
+  }
+  return <div className="login-page">
+    <form className="login-card" onSubmit={submit}>
+      <div className="login-mark">{branding.branding.logo_url ? <img src={branding.branding.logo_url} alt="" /> : "FX"}</div>
+      <p>SECURE TRADING CLOUD</p><h1>{branding.name}</h1><span>Sign in to your trading command centre.</span>
+      {error && <div className="error">{error}</div>}
+      <label>Email<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" /></label>
+      <label>Password<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" /></label>
+      <button className="trade" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
+    </form>
   </div>;
 }
 

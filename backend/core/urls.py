@@ -1,5 +1,5 @@
 from django.urls import path
 
-from .views import health
+from .views import CurrentUserView, health
 
-urlpatterns = [path("health", health)]
+urlpatterns = [path("health", health), path("me", CurrentUserView.as_view())]

@@ -8,7 +8,9 @@ from core.models import TimeStampedModel
 
 class ExecutionNode(TimeStampedModel):
     tenant = models.ForeignKey("tenancy.Tenant", related_name="execution_nodes", on_delete=models.PROTECT)
-    account = models.OneToOneField("trading.TradingAccount", related_name="execution_node", on_delete=models.PROTECT)
+    account = models.OneToOneField(
+        "trading.TradingAccount", related_name="execution_node", on_delete=models.PROTECT
+    )
     name = models.CharField(max_length=160)
     device_id = models.CharField(max_length=128, unique=True)
     credential_hash = models.CharField(max_length=128)
@@ -67,7 +69,9 @@ class ExecutionEvent(TimeStampedModel):
     tenant = models.ForeignKey("tenancy.Tenant", related_name="execution_events", on_delete=models.PROTECT)
     node = models.ForeignKey(ExecutionNode, related_name="events", on_delete=models.PROTECT)
     command = models.ForeignKey(TerminalCommand, related_name="events", on_delete=models.PROTECT)
-    intent = models.ForeignKey("trading.TradeIntent", related_name="execution_events", on_delete=models.PROTECT)
+    intent = models.ForeignKey(
+        "trading.TradeIntent", related_name="execution_events", on_delete=models.PROTECT
+    )
     event_id = models.UUIDField(unique=True)
     event_type = models.CharField(max_length=24)
     terminal_time = models.DateTimeField()

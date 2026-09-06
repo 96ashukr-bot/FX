@@ -105,7 +105,9 @@ class TradeIntent(TimeStampedModel):
     tenant = models.ForeignKey("tenancy.Tenant", related_name="trade_intents", on_delete=models.PROTECT)
     account = models.ForeignKey(TradingAccount, related_name="trade_intents", on_delete=models.PROTECT)
     strategy = models.ForeignKey(Strategy, null=True, blank=True, on_delete=models.SET_NULL)
-    parent_intent = models.ForeignKey("self", null=True, blank=True, related_name="child_intents", on_delete=models.PROTECT)
+    parent_intent = models.ForeignKey(
+        "self", null=True, blank=True, related_name="child_intents", on_delete=models.PROTECT
+    )
     source = models.CharField(max_length=24, choices=Source.choices)
     action = models.CharField(max_length=12, choices=Action.choices)
     state = models.CharField(max_length=16, choices=State.choices, default=State.RECEIVED)
@@ -124,7 +126,9 @@ class TradeIntent(TimeStampedModel):
     failure_message = models.TextField(blank=True)
 
     class Meta:
-        constraints = [models.UniqueConstraint(fields=["account", "idempotency_key"], name="unique_account_intent")]
+        constraints = [
+            models.UniqueConstraint(fields=["account", "idempotency_key"], name="unique_account_intent")
+        ]
         indexes = [
             models.Index(fields=["tenant", "state", "created_at"]),
             models.Index(fields=["account", "state", "created_at"]),
@@ -169,5 +173,7 @@ class CopyRelationship(TimeStampedModel):
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["leader", "follower"], name="unique_copy_relationship"),
-            models.CheckConstraint(condition=~models.Q(leader=models.F("follower")), name="copy_accounts_differ"),
+            models.CheckConstraint(
+                condition=~models.Q(leader=models.F("follower")), name="copy_accounts_differ"
+            ),
         ]

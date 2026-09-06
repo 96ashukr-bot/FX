@@ -4,13 +4,23 @@ import json
 import time
 
 from django.conf import settings
-from rest_framework import status
+from django.utils import timezone
+from rest_framework import generics, status
 from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import Strategy, TradeIntent, TradingAccount
-from .serializers import ManualTradeSerializer, TradeIntentSerializer, TradingAccountSerializer
+from core.permissions import IsTenantAdmin, IsTenantOperator
+
+from .models import CopyRelationship, Position, Strategy, TradeIntent, TradingAccount
+from .serializers import (
+    CopyRelationshipSerializer,
+    ManualTradeSerializer,
+    PositionSerializer,
+    StrategySerializer,
+    TradeIntentSerializer,
+    TradingAccountSerializer,
+)
 from .services import IntentError, create_trade_intent
 
 
@@ -23,7 +33,7 @@ def tenant_for_request(request):
     return tenant
 
 
-class AccountListView(ListAPIView):
+class AccountListView(generics.ListCreateAPIView):
     serializer_class = TradingAccountSerializer
 
     def get_queryset(self):
@@ -32,6 +42,29 @@ class AccountListView(ListAPIView):
         if self.request.user.role == self.request.user.Role.CLIENT:
             queryset = queryset.filter(client=self.request.user)
         return queryset.order_by("broker_name", "login")
+
+    def perform_create(self, serializer):
+        tenant = tenant_for_request(self.request)
+        client = serializer.validated_data["client"]
+        if client.tenant_id != tenant.id:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError("Client must belong to the active tenant")
+        if self.request.user.role == self.request.user.Role.CLIENT and client.id != self.request.user.id:
+            from rest_framework.exceptions import PermissionDenied
+
+            raise PermissionDenied("Clients may only add their own trading accounts")
+        serializer.save(tenant=tenant)
+
+
+class AccountDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = TradingAccountSerializer
+
+    def get_queryset(self):
+        queryset = TradingAccount.objects.filter(tenant=tenant_for_request(self.request))
+        if self.request.user.role == self.request.user.Role.CLIENT:
+            queryset = queryset.filter(client=self.request.user)
+        return queryset
 
 
 class IntentListView(ListAPIView):
@@ -53,7 +86,9 @@ class ManualTradeView(APIView):
         serializer = ManualTradeSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         tenant = tenant_for_request(request)
-        account = TradingAccount.objects.filter(pk=serializer.validated_data["account_id"], tenant=tenant).first()
+        account = TradingAccount.objects.filter(
+            pk=serializer.validated_data["account_id"], tenant=tenant
+        ).first()
         if not account:
             return Response({"detail": "Trading account not found"}, status=404)
         if request.user.role == request.user.Role.CLIENT and account.client_id != request.user.id:
@@ -79,12 +114,16 @@ class TradingViewWebhookView(APIView):
     permission_classes = []
 
     def post(self, request, tenant_slug, strategy_slug):
-        strategy = Strategy.objects.select_related("tenant").filter(
-            tenant__slug=tenant_slug,
-            slug=strategy_slug,
-            tenant__is_active=True,
-            is_active=True,
-        ).first()
+        strategy = (
+            Strategy.objects.select_related("tenant")
+            .filter(
+                tenant__slug=tenant_slug,
+                slug=strategy_slug,
+                tenant__is_active=True,
+                is_active=True,
+            )
+            .first()
+        )
         if not strategy:
             return Response({"detail": "Webhook not found"}, status=404)
         timestamp = request.headers.get("X-FX-Timestamp", "")
@@ -99,7 +138,9 @@ class TradingViewWebhookView(APIView):
             webhook_secret = strategy.get_webhook_secret()
         except RuntimeError:
             return Response({"detail": "Webhook secret is unavailable"}, status=503)
-        expected = hmac.new(webhook_secret.encode(), timestamp.encode() + b"." + body, hashlib.sha256).hexdigest()
+        expected = hmac.new(
+            webhook_secret.encode(), timestamp.encode() + b"." + body, hashlib.sha256
+        ).hexdigest()
         if not hmac.compare_digest(signature, expected):
             return Response({"detail": "Invalid webhook signature"}, status=401)
         payload = json.loads(body)
@@ -112,7 +153,9 @@ class TradingViewWebhookView(APIView):
                 intent, created = create_trade_intent(
                     account=account,
                     source=TradeIntent.Source.WEBHOOK,
-                    action=TradeIntent.Action.OPEN if payload.get("action", "OPEN").upper() == "OPEN" else TradeIntent.Action.CLOSE,
+                    action=TradeIntent.Action.OPEN
+                    if payload.get("action", "OPEN").upper() == "OPEN"
+                    else TradeIntent.Action.CLOSE,
                     idempotency_key=key,
                     payload=payload,
                     strategy=strategy,
@@ -121,3 +164,79 @@ class TradingViewWebhookView(APIView):
             except IntentError as exc:
                 results.append({"account_id": account.id, "error": str(exc)})
         return Response({"accepted": True, "results": results}, status=status.HTTP_202_ACCEPTED)
+
+
+class StrategyListCreateView(generics.ListCreateAPIView):
+    serializer_class = StrategySerializer
+    permission_classes = [IsTenantOperator]
+
+    def get_queryset(self):
+        return Strategy.objects.filter(tenant=tenant_for_request(self.request)).order_by("name")
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["tenant"] = tenant_for_request(self.request)
+        return context
+
+
+class PositionListView(ListAPIView):
+    serializer_class = PositionSerializer
+
+    def get_queryset(self):
+        queryset = Position.objects.filter(tenant=tenant_for_request(self.request)).select_related("account")
+        if self.request.user.role == self.request.user.Role.CLIENT:
+            queryset = queryset.filter(account__client=self.request.user)
+        open_value = self.request.query_params.get("open")
+        if open_value is not None:
+            queryset = queryset.filter(is_open=open_value.lower() == "true")
+        return queryset.order_by("-updated_at")[:500]
+
+
+class CopyRelationshipListCreateView(generics.ListCreateAPIView):
+    serializer_class = CopyRelationshipSerializer
+    permission_classes = [IsTenantAdmin]
+
+    def get_queryset(self):
+        return CopyRelationship.objects.filter(tenant=tenant_for_request(self.request)).select_related(
+            "leader", "follower"
+        )
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["tenant"] = tenant_for_request(self.request)
+        return context
+
+
+class PositionCloseView(APIView):
+    def post(self, request, position_id):
+        tenant = tenant_for_request(request)
+        position = (
+            Position.objects.select_related("account", "opening_intent")
+            .filter(pk=position_id, tenant=tenant, is_open=True)
+            .first()
+        )
+        if not position or (
+            request.user.role == request.user.Role.CLIENT and position.account.client_id != request.user.id
+        ):
+            return Response({"detail": "Open position not found"}, status=404)
+        idempotency_key = str(
+            request.data.get("idempotency_key") or f"close:{position.id}:{timezone.now().timestamp()}"
+        )
+        try:
+            intent, created = create_trade_intent(
+                account=position.account,
+                source=TradeIntent.Source.KILL_SWITCH,
+                action=TradeIntent.Action.CLOSE,
+                idempotency_key=idempotency_key,
+                parent=position.opening_intent,
+                payload={
+                    "symbol": position.canonical_symbol,
+                    "side": "SELL" if position.side == "BUY" else "BUY",
+                    "order_type": "MARKET",
+                    "volume": position.volume,
+                    "execution_snapshot": position.broker_snapshot,
+                },
+            )
+        except IntentError as exc:
+            return Response({"detail": str(exc)}, status=409)
+        return Response(TradeIntentSerializer(intent).data, status=201 if created else 200)

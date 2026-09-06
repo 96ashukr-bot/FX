@@ -12,7 +12,21 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail || `Request failed (${response.status})`);
+    const message = body.detail || body.message || Object.values(body).flat().join(" ");
+    throw new Error(message || `Request failed (${response.status})`);
   }
   return response.status === 204 ? (undefined as T) : response.json();
+}
+
+export async function login(email: string, password: string) {
+  const response = await fetch("/api/v1/auth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.detail || "Unable to sign in");
+  localStorage.setItem("access_token", body.access);
+  localStorage.setItem("refresh_token", body.refresh);
+  return body;
 }
