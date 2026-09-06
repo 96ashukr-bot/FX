@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from trading.models import Position, TradeIntent, TradingAccount
+from trading.services import process_account_snapshot
 
 from .authentication import ExecutionNodeAuthentication
 from .models import AccountSnapshot, ExecutionEvent, ExecutionNode, TerminalCommand
@@ -165,7 +166,21 @@ class SnapshotView(NodeAPIView):
                 "positions": request.data.get("positions") or [],
             },
         )
-        return Response({"accepted": True, "duplicate": not created})
+        account_data = request.data.get("account") or {}
+        TradingAccount.objects.filter(pk=node.account_id).update(
+            last_balance=account_data.get("balance"),
+            last_equity=account_data.get("equity"),
+            last_seen_at=timezone.now(),
+            updated_at=timezone.now(),
+        )
+        queued = []
+        if created:
+            queued = process_account_snapshot(
+                node=node,
+                captured_at=request.data.get("captured_at") or timezone.now(),
+                positions=request.data.get("positions") or [],
+            )
+        return Response({"accepted": True, "duplicate": not created, "protection_exits": queued})
 
 
 class NodeProvisionView(APIView):

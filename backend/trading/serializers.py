@@ -53,12 +53,27 @@ class TradeIntentSerializer(serializers.ModelSerializer):
             "requested_price",
             "stop_loss",
             "take_profit",
+            "current_price",
+            "current_profit",
+            "last_broker_seen_at",
+            "protection_revision",
             "execution_snapshot",
             "failure_code",
             "failure_message",
             "created_at",
             "updated_at",
         )
+        read_only_fields = ("current_price", "current_profit", "last_broker_seen_at", "protection_revision")
+
+
+class PositionProtectionSerializer(serializers.Serializer):
+    stop_loss = serializers.DecimalField(max_digits=20, decimal_places=8, required=False, allow_null=True)
+    take_profit = serializers.DecimalField(max_digits=20, decimal_places=8, required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("Provide stop_loss or take_profit")
+        return attrs
 
 
 class ManualTradeSerializer(serializers.Serializer):

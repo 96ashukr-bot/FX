@@ -16,12 +16,13 @@ from .models import CopyRelationship, Position, Strategy, TradeIntent, TradingAc
 from .serializers import (
     CopyRelationshipSerializer,
     ManualTradeSerializer,
+    PositionProtectionSerializer,
     PositionSerializer,
     StrategySerializer,
     TradeIntentSerializer,
     TradingAccountSerializer,
 )
-from .services import IntentError, create_trade_intent
+from .services import IntentError, create_trade_intent, queue_position_close
 
 
 def tenant_for_request(request):
@@ -240,3 +241,35 @@ class PositionCloseView(APIView):
         except IntentError as exc:
             return Response({"detail": str(exc)}, status=409)
         return Response(TradeIntentSerializer(intent).data, status=201 if created else 200)
+
+
+class PositionProtectionView(APIView):
+    def patch(self, request, position_id):
+        tenant = tenant_for_request(request)
+        position = Position.objects.filter(pk=position_id, tenant=tenant, is_open=True).first()
+        if not position or (request.user.role == request.user.Role.CLIENT and position.account.client_id != request.user.id):
+            return Response({"detail": "Open position not found"}, status=404)
+        serializer = PositionProtectionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        for field in ("stop_loss", "take_profit"):
+            if field in serializer.validated_data:
+                setattr(position, field, serializer.validated_data[field])
+        position.protection_revision += 1
+        position.save(update_fields=["stop_loss", "take_profit", "protection_revision", "updated_at"])
+        return Response(PositionSerializer(position).data)
+
+
+class AccountKillSwitchView(APIView):
+    def post(self, request, account_id):
+        tenant = tenant_for_request(request)
+        account = TradingAccount.objects.filter(pk=account_id, tenant=tenant).first()
+        if not account or (request.user.role == request.user.Role.CLIENT and account.client_id != request.user.id):
+            return Response({"detail": "Trading account not found"}, status=404)
+        results = []
+        for position in Position.objects.select_related("account", "opening_intent").filter(account=account, is_open=True):
+            try:
+                intent, created = queue_position_close(position, TradeIntent.Source.KILL_SWITCH, "Account kill switch")
+                results.append({"position_id": position.id, "intent_id": intent.id, "created": created})
+            except IntentError as exc:
+                results.append({"position_id": position.id, "error": str(exc)})
+        return Response({"accepted": True, "results": results}, status=202)

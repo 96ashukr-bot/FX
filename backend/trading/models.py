@@ -148,6 +148,10 @@ class Position(TimeStampedModel):
     open_price = models.DecimalField(max_digits=20, decimal_places=8)
     stop_loss = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
     take_profit = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    current_price = models.DecimalField(max_digits=20, decimal_places=8, null=True, blank=True)
+    current_profit = models.DecimalField(max_digits=20, decimal_places=4, null=True, blank=True)
+    last_broker_seen_at = models.DateTimeField(null=True, blank=True)
+    protection_revision = models.PositiveIntegerField(default=1)
     is_open = models.BooleanField(default=True)
     broker_snapshot = models.JSONField(default=dict)
 

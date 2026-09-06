@@ -7,8 +7,8 @@ from django.utils import timezone
 from core.models import User
 from tenancy.models import SubscriptionPlan, Tenant, TenantSubscription
 from terminal.models import ExecutionNode, TerminalCommand
-from trading.models import TradeIntent, TradingAccount
-from trading.services import create_trade_intent
+from trading.models import Position, TradeIntent, TradingAccount
+from trading.services import create_trade_intent, process_account_snapshot
 
 
 class ExecutionLifecycleTests(TestCase):
@@ -142,3 +142,35 @@ class ExecutionLifecycleTests(TestCase):
         intent.refresh_from_db()
         self.assertEqual(intent.request_snapshot["volume"], "0.10")
         self.assertEqual(intent.request_snapshot["price"], "1.12500")
+
+    def test_terminal_snapshot_queues_exact_stop_loss_exit_once(self):
+        opening, _ = create_trade_intent(
+            account=self.account,
+            source=TradeIntent.Source.MANUAL,
+            action=TradeIntent.Action.OPEN,
+            idempotency_key="open-protected",
+            payload={"symbol": "EURUSD", "side": "BUY", "order_type": "MARKET", "volume": "0.10"},
+        )
+        position = Position.objects.create(
+            tenant=self.tenant,
+            account=self.account,
+            opening_intent=opening,
+            canonical_symbol="EURUSD",
+            broker_symbol="EURUSD.a",
+            side="BUY",
+            broker_position_ticket="98765",
+            volume="0.10",
+            open_price="1.10000",
+            stop_loss="1.09000",
+            take_profit="1.12000",
+            broker_snapshot={"position_ticket": "98765", "broker_symbol": "EURUSD.a"},
+        )
+        snapshot = [{"position_ticket": "98765", "current_price": "1.08990", "profit": "-10"}]
+        first = process_account_snapshot(node=self.node, captured_at=timezone.now(), positions=snapshot)
+        second = process_account_snapshot(node=self.node, captured_at=timezone.now(), positions=snapshot)
+        self.assertTrue(first[0]["created"])
+        self.assertFalse(second[0]["created"])
+        close = TradeIntent.objects.get(parent_intent=opening, source=TradeIntent.Source.STOP_LOSS)
+        self.assertEqual(close.commands.get().payload["close_snapshot"]["position_ticket"], "98765")
+        position.refresh_from_db()
+        self.assertEqual(position.current_price, Decimal("1.08990000"))

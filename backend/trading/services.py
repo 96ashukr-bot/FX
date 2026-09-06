@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from terminal.models import TerminalCommand
 
-from .models import TradeIntent, TradingAccount
+from .models import Position, TradeIntent, TradingAccount
 
 EXIT_SOURCES = {
     TradeIntent.Source.STOP_LOSS,
@@ -131,3 +131,62 @@ def create_trade_intent(*, account, source, action, idempotency_key, payload, st
         },
     )
     return intent, True
+
+
+def queue_position_close(position, source, reason):
+    """Queue one idempotent close for the exact broker-confirmed position."""
+    return create_trade_intent(
+        account=position.account,
+        source=source,
+        action=TradeIntent.Action.CLOSE,
+        idempotency_key=f"exit:{source}:{position.id}:r{position.protection_revision}",
+        parent=position.opening_intent,
+        payload={
+            "symbol": position.canonical_symbol,
+            "side": "SELL" if position.side == "BUY" else "BUY",
+            "order_type": "MARKET",
+            "volume": position.volume,
+            "execution_snapshot": position.broker_snapshot,
+            "reason": reason,
+        },
+    )
+
+
+def process_account_snapshot(*, node, captured_at, positions):
+    """Reconcile exact terminal tickets and synchronously dispatch SL/TP exits."""
+    seen = set()
+    queued = []
+    for broker_position in positions:
+        ticket = str(broker_position.get("position_ticket") or broker_position.get("ticket") or "")
+        if not ticket:
+            continue
+        seen.add(ticket)
+        position = Position.objects.select_related("account", "opening_intent").filter(
+            account=node.account, broker_position_ticket=ticket, is_open=True
+        ).first()
+        if not position:
+            continue
+        raw_price = broker_position.get("current_price", broker_position.get("price"))
+        if raw_price is None:
+            continue
+        price = Decimal(str(raw_price))
+        position.current_price = price
+        position.current_profit = broker_position.get("profit")
+        position.last_broker_seen_at = captured_at
+        position.broker_snapshot = {**position.broker_snapshot, **_json_safe(broker_position)}
+        position.save(update_fields=["current_price", "current_profit", "last_broker_seen_at", "broker_snapshot", "updated_at"])
+        source = None
+        if position.side == "BUY":
+            if position.stop_loss is not None and price <= position.stop_loss:
+                source = TradeIntent.Source.STOP_LOSS
+            elif position.take_profit is not None and price >= position.take_profit:
+                source = TradeIntent.Source.TAKE_PROFIT
+        else:
+            if position.stop_loss is not None and price >= position.stop_loss:
+                source = TradeIntent.Source.STOP_LOSS
+            elif position.take_profit is not None and price <= position.take_profit:
+                source = TradeIntent.Source.TAKE_PROFIT
+        if source:
+            intent, created = queue_position_close(position, source, f"{source} reached at {price}")
+            queued.append({"position_id": str(position.id), "intent_id": str(intent.id), "created": created})
+    return queued
