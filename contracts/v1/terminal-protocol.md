@@ -6,7 +6,7 @@ All payloads use UTF-8 JSON over HTTPS. Times are UTC RFC 3339. IDs are UUIDs.
 
 `POST /api/v1/terminal/commands/claim`
 
-The authenticated node submits its platform, account login, last acknowledged sequence and capabilities. The API returns zero or one command. A command contains `command_id`, `intent_id`, `sequence`, `kind`, `expires_at`, `account`, `instrument`, `order`, `protection`, `idempotency_key` and `signature`.
+The authenticated node submits its platform and last processed sequence. The API returns zero or one command. A command contains `command_id`, `intent_id`, `sequence`, `kind`, `expires_at` and a `payload` containing `account`, `instrument`, `order`, `protection`, `close_snapshot` and `idempotency_key`.
 
 Command kinds: `PLACE`, `MODIFY`, `CANCEL`, `CLOSE`, `CLOSE_ALL`, `SYNC`.
 
@@ -23,3 +23,9 @@ Every event includes `event_id`, `command_id`, `intent_id`, `sequence`, terminal
 `POST /api/v1/terminal/heartbeat`
 
 Reports EA version, terminal build, broker, server, account mode, trading permission, market connection, clock skew and last processed sequence.
+
+## Account snapshot
+
+`POST /api/v1/terminal/snapshots`
+
+Reports account balance/equity and exact broker position tickets with symbol, side, volume, current price and profit. The server evaluates SL/TP from these authenticated terminal prices. Repeated snapshot sequence values update the latest snapshot safely.

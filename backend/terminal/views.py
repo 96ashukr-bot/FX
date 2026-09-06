@@ -155,7 +155,7 @@ class HeartbeatView(NodeAPIView):
 class SnapshotView(NodeAPIView):
     def post(self, request):
         node = request.execution_node
-        _snapshot, created = AccountSnapshot.objects.get_or_create(
+        _snapshot, created = AccountSnapshot.objects.update_or_create(
             node=node,
             sequence=request.data.get("sequence"),
             defaults={
@@ -173,13 +173,11 @@ class SnapshotView(NodeAPIView):
             last_seen_at=timezone.now(),
             updated_at=timezone.now(),
         )
-        queued = []
-        if created:
-            queued = process_account_snapshot(
-                node=node,
-                captured_at=request.data.get("captured_at") or timezone.now(),
-                positions=request.data.get("positions") or [],
-            )
+        queued = process_account_snapshot(
+            node=node,
+            captured_at=request.data.get("captured_at") or timezone.now(),
+            positions=request.data.get("positions") or [],
+        )
         return Response({"accepted": True, "duplicate": not created, "protection_exits": queued})
 
 
