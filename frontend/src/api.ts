@@ -18,6 +18,23 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
+export async function download(path: string, filename: string) {
+  const token = localStorage.getItem("access_token");
+  const response = await fetch(`${API_BASE}${path}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({}));
+    throw new Error(body.detail || `Download failed (${response.status})`);
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function login(email: string, password: string) {
   const response = await fetch("/api/v1/auth/token", {
     method: "POST",

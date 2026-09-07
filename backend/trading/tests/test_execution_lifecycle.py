@@ -8,6 +8,7 @@ from core.models import User
 from tenancy.models import SubscriptionPlan, Tenant, TenantSubscription
 from terminal.models import ExecutionNode, TerminalCommand
 from trading.models import Position, TradeIntent, TradingAccount
+from trading.serializers import TradingAccountSerializer
 from trading.services import create_trade_intent, process_account_snapshot
 
 
@@ -174,3 +175,23 @@ class ExecutionLifecycleTests(TestCase):
         self.assertEqual(close.commands.get().payload["close_snapshot"]["position_ticket"], "98765")
         position.refresh_from_db()
         self.assertEqual(position.current_price, Decimal("1.08990000"))
+
+    def test_stale_terminal_heartbeat_is_offline(self):
+        self.node.last_heartbeat_at = timezone.now() - timedelta(minutes=2)
+        self.node.save(update_fields=["last_heartbeat_at"])
+        self.assertEqual(TradingAccountSerializer(self.account).data["connection_status"], "OFFLINE")
+        self.node.last_heartbeat_at = timezone.now()
+        self.node.save(update_fields=["last_heartbeat_at"])
+        self.assertEqual(TradingAccountSerializer(self.account).data["connection_status"], "CONNECTED")
+
+    def test_platform_and_account_mode_must_match(self):
+        serializer = TradingAccountSerializer(data={
+            "client": self.client.id,
+            "platform": "MT4",
+            "account_mode": "MT5_HEDGING",
+            "broker_name": "Test Broker",
+            "broker_server": "TestBroker-Demo",
+            "login": "100003",
+        })
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("account_mode", serializer.errors)

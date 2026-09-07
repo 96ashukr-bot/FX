@@ -1,5 +1,9 @@
+from uuid import UUID
+
 from django.db import transaction
+from django.http import FileResponse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -66,23 +70,45 @@ class CommandClaimView(NodeAPIView):
 class EventIngestView(NodeAPIView):
     def post(self, request):
         node = request.execution_node
+        try:
+            event_id = UUID(str(request.data.get("event_id") or ""))
+        except (TypeError, ValueError, AttributeError):
+            return Response({"detail": "A valid event_id is required"}, status=400)
+        terminal_time = parse_datetime(str(request.data.get("terminal_time") or ""))
+        if terminal_time is None:
+            return Response({"detail": "A valid terminal_time is required"}, status=400)
+        payload = request.data.get("payload") or {}
+        if not isinstance(payload, dict):
+            return Response({"detail": "payload must be an object"}, status=400)
         command = TerminalCommand.objects.filter(pk=request.data.get("command_id"), node=node).first()
         if not command:
             return Response({"detail": "Unknown command"}, status=404)
         event_type = str(request.data.get("event_type") or "").upper()
         if event_type not in EVENT_STATE_MAP and event_type != "SNAPSHOT":
             return Response({"detail": "Unsupported event type"}, status=400)
+        if event_type in {"PARTIAL", "FILLED"}:
+            try:
+                filled_volume = float(payload.get("filled_volume") or 0)
+            except (TypeError, ValueError):
+                filled_volume = 0
+            snapshot = payload.get("execution_snapshot") or payload
+            if filled_volume <= 0:
+                return Response({"detail": "A positive filled_volume is required"}, status=400)
+            if not isinstance(snapshot, dict) or not (
+                snapshot.get("deal_ticket") or snapshot.get("order_ticket") or snapshot.get("position_ticket")
+            ):
+                return Response({"detail": "Broker execution identifiers are required"}, status=400)
         with transaction.atomic():
             event, created = ExecutionEvent.objects.get_or_create(
-                event_id=request.data.get("event_id"),
+                event_id=event_id,
                 defaults={
                     "tenant": node.tenant,
                     "node": node,
                     "command": command,
                     "intent": command.intent,
                     "event_type": event_type,
-                    "terminal_time": request.data.get("terminal_time"),
-                    "payload": request.data.get("payload") or {},
+                    "terminal_time": terminal_time,
+                    "payload": payload,
                 },
             )
             if created and event_type in EVENT_STATE_MAP:
@@ -207,3 +233,22 @@ class NodeProvisionView(APIView):
             {"node_id": node.id, "credential": credential, "credential_prefix": node.credential_prefix},
             status=201,
         )
+
+
+class AgentDownloadView(APIView):
+    """Serve the reviewed EA source that matches this API protocol."""
+
+    def get(self, request, platform):
+        platform = platform.lower()
+        filenames = {"mt4": "BridgeSparkFXAgent.mq4", "mt5": "BridgeSparkFXAgent.mq5"}
+        filename = filenames.get(platform)
+        if not filename:
+            return Response({"detail": "Unsupported terminal platform"}, status=404)
+        try:
+            return FileResponse(
+                open(f"/agents/{platform}/{filename}", "rb"),
+                as_attachment=True,
+                filename=filename,
+            )
+        except FileNotFoundError:
+            return Response({"detail": "Agent package is unavailable"}, status=503)

@@ -1,5 +1,7 @@
+from datetime import timedelta
 from decimal import Decimal
 
+from django.utils import timezone
 from rest_framework import serializers
 
 from .models import CopyRelationship, Position, RiskProfile, Strategy, TradeIntent, TradingAccount
@@ -31,7 +33,24 @@ class TradingAccountSerializer(serializers.ModelSerializer):
 
     def get_connection_status(self, instance):
         node = getattr(instance, "execution_node", None)
-        return "CONNECTED" if node and node.is_active and node.last_heartbeat_at else "OFFLINE"
+        fresh_after = timezone.now() - timedelta(seconds=90)
+        return (
+            "CONNECTED"
+            if node and node.is_active and node.last_heartbeat_at and node.last_heartbeat_at >= fresh_after
+            else "OFFLINE"
+        )
+
+    def validate(self, attrs):
+        platform = attrs.get("platform", getattr(self.instance, "platform", None))
+        mode = attrs.get("account_mode", getattr(self.instance, "account_mode", None))
+        if platform == TradingAccount.Platform.MT4 and mode != TradingAccount.AccountMode.MT4_TICKETS:
+            raise serializers.ValidationError({"account_mode": "MT4 requires MT4_TICKETS mode"})
+        if platform == TradingAccount.Platform.MT5 and mode not in {
+            TradingAccount.AccountMode.MT5_HEDGING,
+            TradingAccount.AccountMode.MT5_NETTING,
+        }:
+            raise serializers.ValidationError({"account_mode": "MT5 requires MT5_HEDGING or MT5_NETTING mode"})
+        return attrs
 
 
 class TradeIntentSerializer(serializers.ModelSerializer):
@@ -53,17 +72,13 @@ class TradeIntentSerializer(serializers.ModelSerializer):
             "requested_price",
             "stop_loss",
             "take_profit",
-            "current_price",
-            "current_profit",
-            "last_broker_seen_at",
-            "protection_revision",
             "execution_snapshot",
             "failure_code",
             "failure_message",
             "created_at",
             "updated_at",
         )
-        read_only_fields = ("current_price", "current_profit", "last_broker_seen_at", "protection_revision")
+        read_only_fields = fields
 
 
 class PositionProtectionSerializer(serializers.Serializer):
@@ -125,6 +140,10 @@ class PositionSerializer(serializers.ModelSerializer):
             "open_price",
             "stop_loss",
             "take_profit",
+            "current_price",
+            "current_profit",
+            "last_broker_seen_at",
+            "protection_revision",
             "is_open",
             "created_at",
             "updated_at",
