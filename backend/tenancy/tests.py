@@ -74,3 +74,32 @@ class SaaSIsolationTests(TestCase):
         admin = User.objects.get(email="admin@bravo.test")
         self.assertEqual(admin.tenant, tenant)
         self.assertEqual(admin.role, User.Role.TENANT_ADMIN)
+
+    def test_platform_admin_creates_client_in_selected_company(self):
+        client = APIClient()
+        client.force_authenticate(self.platform_admin)
+        response = client.post(
+            "/api/v1/platform/members",
+            {
+                "tenant": str(self.tenant.id),
+                "email": "client@alpha.test",
+                "username": "client@alpha.test",
+                "password": "long-test-password",
+                "role": User.Role.CLIENT,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        created = User.objects.get(email="client@alpha.test")
+        self.assertEqual(created.tenant, self.tenant)
+        self.assertTrue(self.tenant.memberships.filter(user=created, is_active=True).exists())
+
+    def test_tenant_admin_cannot_use_platform_member_endpoint(self):
+        client = APIClient()
+        client.force_authenticate(self.tenant_admin)
+        response = client.post(
+            "/api/v1/platform/members",
+            {"tenant": str(self.tenant.id), "email": "blocked@alpha.test", "role": User.Role.CLIENT},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)

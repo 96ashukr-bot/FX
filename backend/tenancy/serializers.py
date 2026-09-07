@@ -51,6 +51,7 @@ class TenantSerializer(serializers.ModelSerializer):
 
 class MemberSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=10, required=False)
+    tenant_name = serializers.CharField(source="tenant.name", read_only=True)
 
     class Meta:
         model = User
@@ -62,10 +63,11 @@ class MemberSerializer(serializers.ModelSerializer):
             "last_name",
             "role",
             "is_active",
+            "tenant",
+            "tenant_name",
             "password",
-            "created_at",
         )
-        read_only_fields = ("id", "created_at")
+        read_only_fields = ("id", "tenant", "tenant_name")
 
     def create(self, validated_data):
         password = validated_data.pop("password", None)

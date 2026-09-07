@@ -126,6 +126,47 @@ class MemberListCreateView(generics.ListCreateAPIView):
         serializer.save()
 
 
+class PlatformMemberListCreateView(generics.ListCreateAPIView):
+    """Allow the platform owner to manage members inside an explicitly selected tenant."""
+
+    serializer_class = MemberSerializer
+    permission_classes = [IsPlatformAdmin]
+
+    def get_tenant(self):
+        tenant_id = self.request.data.get("tenant") if self.request.method == "POST" else self.request.query_params.get("tenant")
+        tenant = Tenant.objects.filter(pk=tenant_id, is_active=True).first() if tenant_id else None
+        if not tenant:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError({"tenant": "Select an active company"})
+        return tenant
+
+    def get_queryset(self):
+        from core.models import User
+
+        tenant_id = self.request.query_params.get("tenant")
+        queryset = User.objects.exclude(role=User.Role.PLATFORM_ADMIN).select_related("tenant").order_by(
+            "tenant__name", "first_name", "email"
+        )
+        return queryset.filter(tenant_id=tenant_id) if tenant_id else queryset
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.request.method == "POST":
+            context["tenant"] = self.get_tenant()
+        return context
+
+    def perform_create(self, serializer):
+        tenant = self.get_tenant()
+        subscription = getattr(tenant, "subscription", None)
+        active_members = tenant.memberships.filter(is_active=True).count()
+        if subscription and active_members >= subscription.plan.client_limit:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError("This company's client limit has been reached")
+        serializer.save()
+
+
 class DomainListCreateView(generics.ListCreateAPIView):
     serializer_class = DomainSerializer
     permission_classes = [IsTenantAdmin]

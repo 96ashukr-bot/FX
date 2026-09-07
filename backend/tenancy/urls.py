@@ -6,6 +6,7 @@ from .views import (
     DomainListCreateView,
     MemberListCreateView,
     PlanListCreateView,
+    PlatformMemberListCreateView,
     TenantDetailView,
     TenantListCreateView,
     TenantSubscriptionView,
@@ -19,5 +20,6 @@ urlpatterns = [
     path("tenants/<uuid:pk>", TenantDetailView.as_view()),
     path("tenants/<uuid:tenant_id>/subscription", TenantSubscriptionView.as_view()),
     path("members", MemberListCreateView.as_view()),
+    path("platform/members", PlatformMemberListCreateView.as_view()),
     path("domains", DomainListCreateView.as_view()),
 ]
