@@ -1,8 +1,32 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api/v1";
 
-export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem("access_token");
-  const response = await fetch(`${API_BASE}${path}`, {
+let refreshPromise: Promise<string> | null = null;
+
+async function refreshAccessToken(): Promise<string> {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    const refresh = localStorage.getItem("refresh_token");
+    if (!refresh) throw new Error("Your session has expired. Please sign in again.");
+    const response = await fetch(`${API_BASE}/auth/token/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body.access) {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      throw new Error("Your session has expired. Please sign in again.");
+    }
+    localStorage.setItem("access_token", body.access);
+    if (body.refresh) localStorage.setItem("refresh_token", body.refresh);
+    return body.access as string;
+  })().finally(() => { refreshPromise = null; });
+  return refreshPromise;
+}
+
+async function request(path: string, options: RequestInit, token: string | null) {
+  return fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
@@ -10,6 +34,14 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
       ...(options.headers || {}),
     },
   });
+}
+
+export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  let response = await request(path, options, localStorage.getItem("access_token"));
+  if (response.status === 401 && localStorage.getItem("refresh_token")) {
+    const token = await refreshAccessToken();
+    response = await request(path, options, token);
+  }
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     const message = body.detail || body.message || Object.values(body).flat().join(" ");
