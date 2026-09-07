@@ -7,6 +7,7 @@ from core.permissions import IsPlatformAdmin, IsTenantAdmin
 
 from .models import SubscriptionPlan, Tenant, TenantDomain, TenantSubscription
 from .serializers import (
+    CompanyProvisionSerializer,
     DomainSerializer,
     MemberSerializer,
     PlanSerializer,
@@ -58,6 +59,16 @@ class TenantDetailView(generics.RetrieveUpdateAPIView):
     queryset = Tenant.objects.select_related("subscription__plan").prefetch_related("domains")
 
 
+class CompanyProvisionView(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def post(self, request):
+        serializer = CompanyProvisionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        tenant = serializer.save()
+        return Response(TenantSerializer(tenant).data, status=201)
+
+
 class TenantSubscriptionView(APIView):
     permission_classes = [IsPlatformAdmin]
 
@@ -103,6 +114,16 @@ class MemberListCreateView(generics.ListCreateAPIView):
         context = super().get_serializer_context()
         context["tenant"] = self.get_tenant()
         return context
+
+    def perform_create(self, serializer):
+        tenant = self.get_tenant()
+        subscription = getattr(tenant, "subscription", None)
+        active_members = tenant.memberships.filter(is_active=True).count()
+        if subscription and active_members >= subscription.plan.client_limit:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError("This company's client limit has been reached")
+        serializer.save()
 
 
 class DomainListCreateView(generics.ListCreateAPIView):

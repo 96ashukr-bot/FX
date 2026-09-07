@@ -52,3 +52,25 @@ class SaaSIsolationTests(TestCase):
         response = client.get("/api/v1/me")
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.json()["subscription"]["permits_trading"])
+
+    def test_platform_admin_provisions_complete_company(self):
+        client = APIClient()
+        client.force_authenticate(self.platform_admin)
+        response = client.post(
+            "/api/v1/companies/provision",
+            {
+                "name": "Bravo FX",
+                "slug": "bravo-fx",
+                "admin_email": "admin@bravo.test",
+                "admin_password": "long-test-password",
+                "plan": str(self.plan.id),
+                "subscription_days": 45,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        tenant = Tenant.objects.get(slug="bravo-fx")
+        self.assertTrue(tenant.subscription.permits_trading)
+        admin = User.objects.get(email="admin@bravo.test")
+        self.assertEqual(admin.tenant, tenant)
+        self.assertEqual(admin.role, User.Role.TENANT_ADMIN)

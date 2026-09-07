@@ -2,6 +2,7 @@ from django.urls import path
 
 from .views import (
     BrandingView,
+    CompanyProvisionView,
     DomainListCreateView,
     MemberListCreateView,
     PlanListCreateView,
@@ -14,6 +15,7 @@ urlpatterns = [
     path("branding", BrandingView.as_view()),
     path("plans", PlanListCreateView.as_view()),
     path("tenants", TenantListCreateView.as_view()),
+    path("companies/provision", CompanyProvisionView.as_view()),
     path("tenants/<uuid:pk>", TenantDetailView.as_view()),
     path("tenants/<uuid:tenant_id>/subscription", TenantSubscriptionView.as_view()),
     path("members", MemberListCreateView.as_view()),

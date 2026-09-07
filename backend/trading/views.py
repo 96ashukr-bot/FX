@@ -46,6 +46,11 @@ class AccountListView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         tenant = tenant_for_request(self.request)
+        subscription = getattr(tenant, "subscription", None)
+        if subscription and TradingAccount.objects.filter(tenant=tenant, is_enabled=True).count() >= subscription.plan.account_limit:
+            from rest_framework.exceptions import ValidationError
+
+            raise ValidationError("This company's trading-account limit has been reached")
         client = serializer.validated_data["client"]
         if client.tenant_id != tenant.id:
             from rest_framework.exceptions import ValidationError
