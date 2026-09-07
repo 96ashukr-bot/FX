@@ -10,7 +10,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.permissions import IsTenantAdmin, IsTenantOperator
+from core.permissions import IsPlatformAdmin, IsTenantAdmin, IsTenantOperator
 
 from .models import CopyRelationship, Position, Strategy, TradeIntent, TradingAccount
 from .serializers import (
@@ -60,6 +60,30 @@ class AccountListView(generics.ListCreateAPIView):
             from rest_framework.exceptions import PermissionDenied
 
             raise PermissionDenied("Clients may only add their own trading accounts")
+        serializer.save(tenant=tenant)
+
+
+class PlatformAccountListView(generics.ListCreateAPIView):
+    serializer_class = TradingAccountSerializer
+    permission_classes = [IsPlatformAdmin]
+
+    def get_queryset(self):
+        queryset = TradingAccount.objects.select_related("tenant", "client", "execution_node")
+        client_id = self.request.query_params.get("client")
+        return queryset.filter(client_id=client_id).order_by("tenant__name", "broker_name", "login") if client_id else queryset.order_by("tenant__name", "broker_name", "login")
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import ValidationError
+
+        from core.models import User
+
+        client = serializer.validated_data["client"]
+        if client.role != User.Role.CLIENT or not client.tenant_id or not client.is_active:
+            raise ValidationError("Select an active client belonging to a company")
+        tenant = client.tenant
+        subscription = getattr(tenant, "subscription", None)
+        if subscription and TradingAccount.objects.filter(tenant=tenant, is_enabled=True).count() >= subscription.plan.account_limit:
+            raise ValidationError("This company's trading-account limit has been reached")
         serializer.save(tenant=tenant)
 
 

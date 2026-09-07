@@ -103,3 +103,34 @@ class SaaSIsolationTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 403)
+
+    def test_platform_admin_creates_terminal_account_for_selected_client(self):
+        member_response = APIClient()
+        member_response.force_authenticate(self.platform_admin)
+        created = member_response.post(
+            "/api/v1/platform/members",
+            {
+                "tenant": str(self.tenant.id),
+                "email": "terminal-client@alpha.test",
+                "username": "terminal-client@alpha.test",
+                "password": "long-test-password",
+                "role": User.Role.CLIENT,
+            },
+            format="json",
+        ).json()
+        response = member_response.post(
+            "/api/v1/platform/accounts",
+            {
+                "client": created["id"],
+                "platform": "MT5",
+                "account_mode": "MT5_HEDGING",
+                "broker_name": "Demo Broker",
+                "broker_server": "Demo-Server",
+                "login": "100001",
+                "currency": "USD",
+                "is_demo": True,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.json()["client"], created["id"])

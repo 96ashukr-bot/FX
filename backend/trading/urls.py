@@ -7,6 +7,7 @@ from .views import (
     CopyRelationshipListCreateView,
     IntentListView,
     ManualTradeView,
+    PlatformAccountListView,
     PositionCloseView,
     PositionListView,
     PositionProtectionView,
@@ -16,6 +17,7 @@ from .views import (
 
 urlpatterns = [
     path("accounts", AccountListView.as_view()),
+    path("platform/accounts", PlatformAccountListView.as_view()),
     path("accounts/<uuid:pk>", AccountDetailView.as_view()),
     path("intents", IntentListView.as_view()),
     path("positions", PositionListView.as_view()),

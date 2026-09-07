@@ -210,7 +210,10 @@ class SnapshotView(NodeAPIView):
 class NodeProvisionView(APIView):
     def post(self, request):
         tenant = getattr(request, "tenant", None) or request.user.tenant
-        account = TradingAccount.objects.filter(pk=request.data.get("account_id"), tenant=tenant).first()
+        account_query = TradingAccount.objects.filter(pk=request.data.get("account_id"))
+        if request.user.role != request.user.Role.PLATFORM_ADMIN:
+            account_query = account_query.filter(tenant=tenant)
+        account = account_query.first()
         if not account or (
             request.user.role == request.user.Role.CLIENT and account.client_id != request.user.id
         ):
@@ -222,7 +225,7 @@ class NodeProvisionView(APIView):
             if ExecutionNode.objects.filter(account=account).exists():
                 return Response({"detail": "This account already has an execution node"}, status=409)
             node = ExecutionNode(
-                tenant=tenant,
+                tenant=account.tenant,
                 account=account,
                 name=str(request.data.get("name") or f"{account.platform} terminal")[:160],
                 device_id=device_id,
